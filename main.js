@@ -158,16 +158,69 @@ for (const sign of [1, -1]) {
 }
 
 const playerMaterial = new THREE.MeshStandardMaterial({ color: 0xffd54f });
-const playerRadius = 0.35;
-const playerBodyLength = 0.9;
-const playerHalfHeight = playerRadius + playerBodyLength / 2;
-const playerBody = new THREE.Mesh(
-  new THREE.CapsuleGeometry(playerRadius, playerBodyLength, 4, 8),
-  playerMaterial
-);
-playerBody.castShadow = true;
+const playerAccentMaterial = new THREE.MeshStandardMaterial({ color: 0x546e7a });
+const playerSkinMaterial = new THREE.MeshStandardMaterial({ color: 0xf2d7b6 });
+
+const torsoWidth = 0.6;
+const torsoHeight = 0.75;
+const torsoDepth = 0.36;
+const headRadius = 0.2;
+const legLength = 0.7;
+const armLength = 0.6;
+const legRadius = 0.12;
+const armRadius = 0.1;
+const shoulderOffset = torsoWidth / 2 + armRadius * 0.6;
+const hipOffset = torsoWidth * 0.2;
+const playerHeight = legLength + torsoHeight + headRadius * 2;
+const playerHalfHeight = playerHeight / 2;
+
 const player = new THREE.Group();
-player.add(playerBody);
+
+const torso = new THREE.Mesh(new THREE.BoxGeometry(torsoWidth, torsoHeight, torsoDepth), playerMaterial);
+torso.position.y = -playerHalfHeight + legLength + torsoHeight / 2;
+torso.castShadow = true;
+torso.receiveShadow = true;
+player.add(torso);
+
+const head = new THREE.Mesh(new THREE.SphereGeometry(headRadius, 16, 12), playerSkinMaterial);
+head.position.y = torso.position.y + torsoHeight / 2 + headRadius;
+head.castShadow = true;
+player.add(head);
+
+const leftLegPivot = new THREE.Group();
+leftLegPivot.position.set(hipOffset, -playerHalfHeight + legLength, 0);
+const leftLeg = new THREE.Mesh(new THREE.CylinderGeometry(legRadius, legRadius, legLength, 8), playerAccentMaterial);
+leftLeg.position.y = -legLength / 2;
+leftLeg.castShadow = true;
+leftLegPivot.add(leftLeg);
+player.add(leftLegPivot);
+
+const rightLegPivot = new THREE.Group();
+rightLegPivot.position.set(-hipOffset, -playerHalfHeight + legLength, 0);
+const rightLeg = new THREE.Mesh(new THREE.CylinderGeometry(legRadius, legRadius, legLength, 8), playerAccentMaterial);
+rightLeg.position.y = -legLength / 2;
+rightLeg.castShadow = true;
+rightLegPivot.add(rightLeg);
+player.add(rightLegPivot);
+
+const leftArmPivot = new THREE.Group();
+leftArmPivot.position.set(shoulderOffset, torso.position.y + torsoHeight / 2 - 0.05, 0);
+leftArmPivot.rotation.z = 0.15;
+const leftArm = new THREE.Mesh(new THREE.CylinderGeometry(armRadius, armRadius, armLength, 8), playerSkinMaterial);
+leftArm.position.y = -armLength / 2;
+leftArm.castShadow = true;
+leftArmPivot.add(leftArm);
+player.add(leftArmPivot);
+
+const rightArmPivot = new THREE.Group();
+rightArmPivot.position.set(-shoulderOffset, torso.position.y + torsoHeight / 2 - 0.05, 0);
+rightArmPivot.rotation.z = -0.15;
+const rightArm = new THREE.Mesh(new THREE.CylinderGeometry(armRadius, armRadius, armLength, 8), playerSkinMaterial);
+rightArm.position.y = -armLength / 2;
+rightArm.castShadow = true;
+rightArmPivot.add(rightArm);
+player.add(rightArmPivot);
+
 player.position.y = playerHalfHeight;
 scene.add(player);
 
@@ -218,6 +271,8 @@ let jumpRequested = false;
 let yaw = 0;
 let pitch = 0.35;
 let distance = 7;
+let walkPhase = 0;
+let currentPlanarSpeed = 0;
 
 const minDistance = 3;
 const maxDistance = 12;
@@ -384,6 +439,7 @@ function updateMovement(delta) {
 
   playerVelocity.x = newDir.x * planarSpeed;
   playerVelocity.z = newDir.z * planarSpeed;
+  currentPlanarSpeed = planarSpeed;
 
   if (planarSpeed > 0.05) {
     player.rotation.y = Math.atan2(newDir.x, newDir.z);
@@ -421,6 +477,26 @@ function updateMovement(delta) {
   }
 
   resolveWallCollision(player.position, playerCollisionRadius, playerVelocity, 0);
+}
+
+function updateHumanoidAnimation(delta) {
+  const maxSpeed = moveSpeed * sprintMultiplier;
+  const speedRatio = THREE.MathUtils.clamp(currentPlanarSpeed / maxSpeed, 0, 1);
+  if (speedRatio < 0.01) {
+    leftLegPivot.rotation.x = 0;
+    rightLegPivot.rotation.x = 0;
+    leftArmPivot.rotation.x = 0;
+    rightArmPivot.rotation.x = 0;
+    return;
+  }
+
+  walkPhase += delta * (4 + speedRatio * 8);
+  const legSwing = Math.sin(walkPhase) * 0.9 * speedRatio;
+  const armSwing = Math.sin(walkPhase + Math.PI) * 0.7 * speedRatio;
+  leftLegPivot.rotation.x = legSwing;
+  rightLegPivot.rotation.x = -legSwing;
+  leftArmPivot.rotation.x = armSwing;
+  rightArmPivot.rotation.x = -armSwing;
 }
 
 function resolveWallCollision(position, radius, velocity, restitution) {
@@ -631,6 +707,7 @@ function animate() {
   const delta = Math.min(clock.getDelta(), 0.05);
   updateMovement(delta);
   updateBall(delta);
+  updateHumanoidAnimation(delta);
   if (charging) {
     chargeTime = Math.min(maxChargeTime, chargeTime + delta);
     updateChargeArrow();
