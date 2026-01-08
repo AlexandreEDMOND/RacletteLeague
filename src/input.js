@@ -15,8 +15,8 @@ export function createInput({ renderer, instructions }) {
 
   const cameraState = {
     yaw: 0,
-    pitch: 0.35,
-    distance: 7,
+    pitch: CAMERA.defaultPitch,
+    distance: CAMERA.defaultDistance,
   };
 
   let onPrimaryDown = null;
@@ -41,9 +41,9 @@ export function createInput({ renderer, instructions }) {
       input.sprint = isDown;
     } else if (event.code === "Space" && isDown) {
       input.jumpRequested = true;
-    } else if (event.code === "KeyA" && isDown) {
+    } else if (key === "a" && isDown) {
       input.trickLeftRequested = true;
-    } else if (event.code === "KeyE" && isDown) {
+    } else if (key === "e" && isDown) {
       input.trickRightRequested = true;
     } else {
       return;
@@ -90,18 +90,7 @@ export function createInput({ renderer, instructions }) {
     cameraState.pitch -= event.movementY * CAMERA.mouseSensitivity;
   });
 
-  document.addEventListener(
-    "wheel",
-    (event) => {
-      cameraState.distance = THREE.MathUtils.clamp(
-        cameraState.distance + event.deltaY * 0.01,
-        CAMERA.minDistance,
-        CAMERA.maxDistance
-      );
-      event.preventDefault();
-    },
-    { passive: false }
-  );
+  // Wheel zoom disabled: keep a fixed camera distance.
 
   document.addEventListener("mousedown", (event) => {
     if (event.button !== 0 || !onPrimaryDown) {

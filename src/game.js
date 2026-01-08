@@ -60,7 +60,7 @@ export function createGame({ world, input, ui }) {
     const facing = playerTeam === "blue" ? 0 : Math.PI;
     playerGroup.rotation.y = facing;
     cameraState.yaw = facing;
-    cameraState.pitch = 0.35;
+    cameraState.pitch = CAMERA.defaultPitch;
 
     energy = MOVEMENT.maxEnergy;
     ui.updateEnergy(1);
@@ -438,7 +438,7 @@ export function createGame({ world, input, ui }) {
     inputState.jumpRequested = false;
     if (inputState.trickLeftRequested || inputState.trickRightRequested) {
       if (trickTime <= 0 && energy >= MOVEMENT.trickEnergyCost) {
-        trickDirection = inputState.trickLeftRequested ? -1 : 1;
+        trickDirection = inputState.trickLeftRequested ? 1 : -1;
         trickTime = MOVEMENT.trickDuration;
         energy = Math.max(0, energy - MOVEMENT.trickEnergyCost);
         ui.updateEnergy(energy / MOVEMENT.maxEnergy);
@@ -538,6 +538,10 @@ export function createGame({ world, input, ui }) {
   }
 
   function updateCamera() {
+    if (gameState === "countdown") {
+      cameraState.pitch = CAMERA.defaultPitch;
+      cameraState.yaw = playerGroup.rotation.y;
+    }
     const targetHeight = 0.8;
     const target = new THREE.Vector3(playerGroup.position.x, playerGroup.position.y + targetHeight, playerGroup.position.z);
     const minCameraHeight = groundY + 0.2;

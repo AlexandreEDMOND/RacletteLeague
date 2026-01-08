@@ -41,6 +41,8 @@ export const CAMERA = {
   maxDistance: 12,
   pitchMin: -1.2,
   pitchMax: 1.2,
+  defaultDistance: 8,
+  defaultPitch: -0.4,
   mouseSensitivity: 0.0022,
 };
 
