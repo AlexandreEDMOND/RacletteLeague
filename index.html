@@ -16,6 +16,43 @@
         Mouse to look, wheel to zoom
       </div>
     </div>
+    <div id="hud-top">
+      <div id="scoreboard">
+        <span class="team blue">Bleu</span>
+        <span id="blueScore">0</span>
+        <span class="dash">-</span>
+        <span id="redScore">0</span>
+        <span class="team red">Rouge</span>
+      </div>
+      <div id="timer">02:00</div>
+    </div>
+    <div id="countdown" class="center-banner">3</div>
+    <div id="goalBanner" class="center-banner">BUT !</div>
+    <div id="teamSelect" class="overlay">
+      <div class="panel">
+        <div class="panel-title">Choisir une equipe</div>
+        <div class="panel-actions">
+          <button class="btn blue" data-team="blue">Equipe Bleue</button>
+          <button class="btn red" data-team="red">Equipe Rouge</button>
+        </div>
+      </div>
+    </div>
+    <div id="matchEnd" class="overlay">
+      <div class="panel">
+        <div class="panel-title">Fin du match</div>
+        <div class="panel-score">
+          <span class="team blue">Bleu</span>
+          <span id="finalBlueScore">0</span>
+          <span class="dash">-</span>
+          <span id="finalRedScore">0</span>
+          <span class="team red">Rouge</span>
+        </div>
+        <div class="panel-actions">
+          <button class="btn light" id="restartMatch">Recommencer</button>
+          <button class="btn outline" id="changeTeam">Changer d'equipe</button>
+        </div>
+      </div>
+    </div>
     <div id="hud">
       <div class="energy-label">Energy</div>
       <div class="energy-bar">

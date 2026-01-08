@@ -27,6 +27,7 @@ canvas {
   background: radial-gradient(circle at center, rgba(15, 21, 32, 0.6), rgba(15, 21, 32, 0.9));
   letter-spacing: 0.04em;
   text-transform: uppercase;
+  z-index: 3;
 }
 
 #instructions .title {
@@ -37,6 +38,148 @@ canvas {
 #instructions .controls {
   font-size: 12px;
   line-height: 1.6;
+}
+
+#hud-top {
+  position: absolute;
+  top: 18px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: grid;
+  gap: 6px;
+  justify-items: center;
+  color: #f8f4ee;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  font-size: 12px;
+  z-index: 2;
+  pointer-events: none;
+}
+
+#scoreboard {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 14px;
+  background: rgba(15, 21, 32, 0.75);
+  border-radius: 999px;
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.15);
+}
+
+#scoreboard .team {
+  font-weight: 700;
+}
+
+#scoreboard .team.blue {
+  color: #8ec5ff;
+}
+
+#scoreboard .team.red {
+  color: #ff9b9b;
+}
+
+#timer {
+  font-size: 14px;
+  padding: 4px 12px;
+  border-radius: 999px;
+  background: rgba(15, 21, 32, 0.75);
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.15);
+}
+
+.center-banner {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  font-size: 48px;
+  font-weight: 700;
+  color: #f8f4ee;
+  text-transform: uppercase;
+  letter-spacing: 0.15em;
+  text-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
+  z-index: 4;
+  display: none;
+  pointer-events: none;
+}
+
+.overlay {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  background: rgba(10, 15, 22, 0.85);
+  z-index: 5;
+}
+
+.panel {
+  padding: 24px 28px;
+  background: rgba(20, 28, 40, 0.95);
+  border-radius: 16px;
+  min-width: 280px;
+  text-align: center;
+  box-shadow: 0 18px 40px rgba(0, 0, 0, 0.4);
+  color: #f8f4ee;
+}
+
+.panel-title {
+  font-size: 18px;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  margin-bottom: 16px;
+}
+
+.panel-score {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  margin-bottom: 16px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.panel-actions {
+  display: grid;
+  gap: 10px;
+}
+
+.btn {
+  padding: 10px 16px;
+  border-radius: 10px;
+  border: none;
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  cursor: pointer;
+}
+
+.btn.blue {
+  background: #3b82f6;
+  color: #f8f4ee;
+}
+
+.btn.red {
+  background: #ef4444;
+  color: #f8f4ee;
+}
+
+.btn.light {
+  background: #f8f4ee;
+  color: #1b202b;
+}
+
+.btn.outline {
+  background: transparent;
+  border: 1px solid rgba(248, 244, 238, 0.6);
+  color: #f8f4ee;
+}
+
+#matchEnd {
+  display: none;
+}
+
+#teamSelect {
+  display: grid;
 }
 
 #hud {

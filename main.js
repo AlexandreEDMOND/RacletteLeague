@@ -259,6 +259,9 @@ const jumpEnergyCost = 18;
 const gravity = -18;
 const jumpSpeed = 7.5;
 const groundY = 0;
+const matchDuration = 120;
+const countdownDuration = 3;
+const goalPauseDuration = 2;
 
 const input = {
   forward: false,
@@ -294,6 +297,12 @@ let carryingBall = false;
 let carryCooldown = 0;
 let charging = false;
 let chargeTime = 0;
+let timeLeft = matchDuration;
+let countdownTime = 0;
+let goalPauseTime = 0;
+let gameState = "teamSelect";
+let playerTeam = null;
+const score = { blue: 0, red: 0 };
 
 function setInputState(event, isDown) {
   const key = event.key.toLowerCase();
@@ -328,6 +337,17 @@ window.addEventListener("blur", () => {
 
 const instructions = document.getElementById("instructions");
 const energyFill = document.getElementById("energyFill");
+const blueScoreEl = document.getElementById("blueScore");
+const redScoreEl = document.getElementById("redScore");
+const timerEl = document.getElementById("timer");
+const countdownEl = document.getElementById("countdown");
+const goalBannerEl = document.getElementById("goalBanner");
+const teamSelectEl = document.getElementById("teamSelect");
+const matchEndEl = document.getElementById("matchEnd");
+const finalBlueScoreEl = document.getElementById("finalBlueScore");
+const finalRedScoreEl = document.getElementById("finalRedScore");
+const restartMatchButton = document.getElementById("restartMatch");
+const changeTeamButton = document.getElementById("changeTeam");
 function requestLock() {
   renderer.domElement.requestPointerLock();
 }
@@ -340,6 +360,37 @@ document.addEventListener("pointerlockchange", () => {
     instructions.style.display = "none";
   } else {
     instructions.style.display = "grid";
+  }
+});
+
+teamSelectEl.querySelectorAll("[data-team]").forEach((button) => {
+  button.addEventListener("click", () => {
+    const team = button.getAttribute("data-team");
+    if (team !== "blue" && team !== "red") {
+      return;
+    }
+    playerTeam = team;
+    setPlayerColors(team);
+    teamSelectEl.style.display = "none";
+    matchEndEl.style.display = "none";
+    startMatch();
+  });
+});
+
+restartMatchButton.addEventListener("click", () => {
+  if (!playerTeam) {
+    return;
+  }
+  matchEndEl.style.display = "none";
+  startMatch();
+});
+
+changeTeamButton.addEventListener("click", () => {
+  matchEndEl.style.display = "none";
+  teamSelectEl.style.display = "grid";
+  gameState = "teamSelect";
+  if (document.pointerLockElement) {
+    document.exitPointerLock();
   }
 });
 
@@ -361,6 +412,173 @@ document.addEventListener(
   { passive: false }
 );
 
+function setPlayerColors(team) {
+  if (team === "blue") {
+    playerMaterial.color.setHex(0x64b5f6);
+    playerAccentMaterial.color.setHex(0x1e3a8a);
+  } else {
+    playerMaterial.color.setHex(0xef5350);
+    playerAccentMaterial.color.setHex(0x7f1d1d);
+  }
+}
+
+function resetPositions() {
+  carryingBall = false;
+  charging = false;
+  chargeTime = 0;
+  chargeArrow.visible = false;
+  ballVelocity.set(0, 0, 0);
+  ball.position.set(0, ballRadius, 0);
+
+  const spawnZ = playerTeam === "blue" ? -fieldLength / 4 : fieldLength / 4;
+  player.position.set(0, playerHalfHeight, spawnZ);
+  playerVelocity.set(0, 0, 0);
+  currentPlanarSpeed = 0;
+
+  const facing = playerTeam === "blue" ? 0 : Math.PI;
+  player.rotation.y = facing;
+  yaw = facing;
+  pitch = 0.35;
+
+  energy = maxEnergy;
+  if (energyFill) {
+    energyFill.style.transform = "scaleX(1)";
+  }
+}
+
+function updateScoreUI() {
+  if (blueScoreEl) {
+    blueScoreEl.textContent = `${score.blue}`;
+  }
+  if (redScoreEl) {
+    redScoreEl.textContent = `${score.red}`;
+  }
+}
+
+function updateTimerUI() {
+  const minutes = Math.floor(timeLeft / 60);
+  const seconds = Math.floor(timeLeft % 60);
+  const formatted = `${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
+  if (timerEl) {
+    timerEl.textContent = formatted;
+    if (timeLeft <= 10) {
+      timerEl.style.color = "#ff5a5a";
+    } else if (timeLeft <= 30) {
+      timerEl.style.color = "#f7d154";
+    } else {
+      timerEl.style.color = "#f8f4ee";
+    }
+  }
+}
+
+function startCountdown() {
+  countdownTime = countdownDuration;
+  gameState = "countdown";
+  if (countdownEl) {
+    countdownEl.style.display = "block";
+    countdownEl.textContent = `${countdownDuration}`;
+  }
+}
+
+function startMatch() {
+  score.blue = 0;
+  score.red = 0;
+  timeLeft = matchDuration;
+  updateScoreUI();
+  updateTimerUI();
+  resetPositions();
+  if (goalBannerEl) {
+    goalBannerEl.style.display = "none";
+  }
+  if (matchEndEl) {
+    matchEndEl.style.display = "none";
+  }
+  startCountdown();
+}
+
+function startKickoffAfterGoal() {
+  resetPositions();
+  startCountdown();
+}
+
+function endMatch() {
+  gameState = "matchEnd";
+  if (finalBlueScoreEl) {
+    finalBlueScoreEl.textContent = `${score.blue}`;
+  }
+  if (finalRedScoreEl) {
+    finalRedScoreEl.textContent = `${score.red}`;
+  }
+  if (matchEndEl) {
+    matchEndEl.style.display = "grid";
+  }
+  if (document.pointerLockElement) {
+    document.exitPointerLock();
+  }
+}
+
+function handleGoal(scoringTeam) {
+  if (gameState !== "playing") {
+    return;
+  }
+  score[scoringTeam] += 1;
+  updateScoreUI();
+  gameState = "goalPause";
+  goalPauseTime = goalPauseDuration;
+  carryingBall = false;
+  charging = false;
+  ballVelocity.set(0, 0, 0);
+  if (goalBannerEl) {
+    goalBannerEl.textContent = "BUT !";
+    goalBannerEl.style.display = "block";
+  }
+}
+
+function updateGameState(delta) {
+  if (gameState === "countdown") {
+    countdownTime -= delta;
+    if (countdownEl) {
+      countdownEl.textContent = `${Math.max(1, Math.ceil(countdownTime))}`;
+    }
+    if (countdownTime <= 0) {
+      gameState = "playing";
+      if (countdownEl) {
+        countdownEl.style.display = "none";
+      }
+    }
+  } else if (gameState === "goalPause") {
+    goalPauseTime -= delta;
+    if (goalPauseTime <= 0) {
+      if (goalBannerEl) {
+        goalBannerEl.style.display = "none";
+      }
+      startKickoffAfterGoal();
+    }
+  } else if (gameState === "playing") {
+    timeLeft = Math.max(0, timeLeft - delta);
+    updateTimerUI();
+    if (timeLeft <= 0) {
+      endMatch();
+    }
+  }
+}
+
+function checkGoal() {
+  if (gameState !== "playing") {
+    return;
+  }
+  const goalPlane = fieldLength / 2 + ballRadius * 0.5;
+  const insideMouth = Math.abs(ball.position.x) <= goalWidth / 2 - ballRadius * 0.4;
+  const lowEnough = ball.position.y <= goalHeight - ballRadius * 0.2;
+  if (insideMouth && lowEnough) {
+    if (ball.position.z > goalPlane) {
+      handleGoal("blue");
+    } else if (ball.position.z < -goalPlane) {
+      handleGoal("red");
+    }
+  }
+}
+
 document.addEventListener("mousedown", (event) => {
   if (event.button !== 0 || !carryingBall || charging) {
     return;
@@ -378,6 +596,13 @@ document.addEventListener("mouseup", (event) => {
 });
 
 function updateMovement(delta) {
+  if (gameState !== "playing") {
+    playerVelocity.set(0, 0, 0);
+    currentPlanarSpeed = 0;
+    player.position.y = playerHalfHeight;
+    return;
+  }
+
   const forward = new THREE.Vector3(Math.sin(yaw), 0, Math.cos(yaw));
   const right = new THREE.Vector3(forward.z, 0, -forward.x);
   const inputDir = new THREE.Vector3();
@@ -636,6 +861,13 @@ function shootBall(speed) {
 }
 
 function updateBall(delta) {
+  if (gameState !== "playing") {
+    ballVelocity.set(0, 0, 0);
+    if (charging) {
+      cancelCharging();
+    }
+    return;
+  }
   if (carryCooldown > 0) {
     carryCooldown = Math.max(0, carryCooldown - delta);
   }
@@ -710,6 +942,7 @@ const clock = new THREE.Clock();
 function animate() {
   requestAnimationFrame(animate);
   const delta = Math.min(clock.getDelta(), 0.05);
+  updateGameState(delta);
   updateMovement(delta);
   updateBall(delta);
   updateHumanoidAnimation(delta);
@@ -719,6 +952,7 @@ function animate() {
   } else if (chargeArrow.visible) {
     chargeArrow.visible = false;
   }
+  checkGoal();
   updateCamera();
   renderer.render(scene, camera);
 }
