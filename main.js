@@ -195,6 +195,9 @@ const ballVelocity = new THREE.Vector3();
 const moveSpeed = 7;
 const moveAcceleration = 18;
 const moveDeceleration = 14;
+const turnRate = 3.1;
+const backwardAccelFactor = 0.4;
+const idleDrag = 0.92;
 const sprintMultiplier = 1.45;
 const maxEnergy = 100;
 const energyDrain = 35;
@@ -321,50 +324,69 @@ document.addEventListener("mouseup", (event) => {
 function updateMovement(delta) {
   const forward = new THREE.Vector3(Math.sin(yaw), 0, Math.cos(yaw));
   const right = new THREE.Vector3(forward.z, 0, -forward.x);
-  const moveDir = new THREE.Vector3();
+  const inputDir = new THREE.Vector3();
   if (input.forward) {
-    moveDir.add(forward);
+    inputDir.add(forward);
   }
   if (input.backward) {
-    moveDir.addScaledVector(forward, -1);
+    inputDir.addScaledVector(forward, -1);
   }
   if (input.left) {
-    moveDir.addScaledVector(right, -1);
+    inputDir.addScaledVector(right, -1);
   }
   if (input.right) {
-    moveDir.add(right);
+    inputDir.add(right);
   }
 
-  const moving = moveDir.lengthSq() > 0;
+  const moving = inputDir.lengthSq() > 0;
   const sprinting = input.sprint && energy > 0.1 && moving;
-  const speed = moveSpeed * (sprinting ? sprintMultiplier : 1);
-
+  const maxSpeed = moveSpeed * (sprinting ? sprintMultiplier : 1);
   if (moving) {
-    moveDir.normalize();
+    inputDir.normalize();
   }
 
-  const desiredX = moving ? moveDir.x * speed : 0;
-  const desiredZ = moving ? moveDir.z * speed : 0;
-  const accel = moving ? moveAcceleration : moveDeceleration;
-  let deltaX = desiredX - playerVelocity.x;
-  let deltaZ = desiredZ - playerVelocity.z;
-  const deltaLen = Math.hypot(deltaX, deltaZ);
-  const maxDelta = accel * delta;
-  if (deltaLen > maxDelta) {
-    const scale = maxDelta / deltaLen;
-    deltaX *= scale;
-    deltaZ *= scale;
-  }
-  playerVelocity.x += deltaX;
-  playerVelocity.z += deltaZ;
+  const planarVelocity = new THREE.Vector3(playerVelocity.x, 0, playerVelocity.z);
+  let planarSpeed = planarVelocity.length();
+  const facingDir = new THREE.Vector3(Math.sin(player.rotation.y), 0, Math.cos(player.rotation.y));
+  const currentDir =
+    planarSpeed > 0.05 ? planarVelocity.normalize() : facingDir.lengthSq() > 0.001 ? facingDir.normalize() : forward;
 
-  const planarSpeed = Math.hypot(playerVelocity.x, playerVelocity.z);
+  let newDir = currentDir.clone();
+  if (moving) {
+    const targetDir = inputDir;
+    const directionDot = THREE.MathUtils.clamp(newDir.dot(targetDir), -1, 1);
+    const angle = Math.acos(directionDot);
+    const turnBoost = 1 + (1 - directionDot) * 1.8;
+    const maxTurn = turnRate * turnBoost * delta;
+    if (angle > 0.0001) {
+      const t = Math.min(1, maxTurn / angle);
+      newDir.lerp(targetDir, t).normalize();
+    }
+
+    const facingDot = THREE.MathUtils.clamp(facingDir.dot(targetDir), -1, 1);
+    const accelScale = THREE.MathUtils.lerp(backwardAccelFactor, 1, (facingDot + 1) / 2);
+    const reverseFactor = Math.max(0, -directionDot);
+    const accel = moveAcceleration * accelScale * (1 - reverseFactor * 0.4);
+
+    if (reverseFactor > 0.01) {
+      const brake = moveDeceleration * (1 + reverseFactor * 1.8);
+      planarSpeed = Math.max(0, planarSpeed - brake * delta);
+    }
+
+    if (planarSpeed < maxSpeed) {
+      planarSpeed = Math.min(maxSpeed, planarSpeed + accel * delta);
+    } else if (planarSpeed > maxSpeed) {
+      planarSpeed = Math.max(maxSpeed, planarSpeed - moveDeceleration * delta);
+    }
+  } else {
+    planarSpeed *= Math.pow(idleDrag, delta * 60);
+  }
+
+  playerVelocity.x = newDir.x * planarSpeed;
+  playerVelocity.z = newDir.z * planarSpeed;
+
   if (planarSpeed > 0.05) {
-    player.rotation.y = Math.atan2(playerVelocity.x, playerVelocity.z);
-  }
-  if (!moving && planarSpeed < 0.02) {
-    playerVelocity.x = 0;
-    playerVelocity.z = 0;
+    player.rotation.y = Math.atan2(newDir.x, newDir.z);
   }
 
   if (sprinting) {
@@ -462,8 +484,8 @@ function updateCarriedBallPosition() {
   if (moveDir.lengthSq() > 0.001) {
     forward = moveDir.normalize();
   } else {
-    const cameraDir = new THREE.Vector3(Math.sin(yaw), 0, Math.cos(yaw));
-    forward = cameraDir.lengthSq() < 0.0001 ? new THREE.Vector3(0, 0, 1) : cameraDir.normalize();
+    const facing = new THREE.Vector3(Math.sin(player.rotation.y), 0, Math.cos(player.rotation.y));
+    forward = facing.lengthSq() < 0.0001 ? new THREE.Vector3(0, 0, 1) : facing.normalize();
   }
   const desired = player.position.clone().addScaledVector(forward, carryDistance);
   desired.y = ballRadius;
