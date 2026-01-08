@@ -179,6 +179,13 @@ ball.receiveShadow = true;
 ball.position.set(0, ballRadius, -5);
 scene.add(ball);
 
+const aimTargetMaterial = new THREE.MeshBasicMaterial({ color: 0xfff59d, transparent: true, opacity: 0.9 });
+const aimTarget = new THREE.Mesh(new THREE.RingGeometry(0.25, 0.45, 32), aimTargetMaterial);
+aimTarget.rotation.x = -Math.PI / 2;
+aimTarget.position.y = 0.02;
+aimTarget.visible = false;
+scene.add(aimTarget);
+
 const playerVelocity = new THREE.Vector3();
 const ballVelocity = new THREE.Vector3();
 const moveSpeed = 7;
@@ -212,8 +219,13 @@ const wallRestitution = 0.65;
 const ballFriction = 0.965;
 const ballPushFactor = 0.9;
 const ballNudge = 0.6;
+const precisionDistance = 2.4;
+const shotSpeed = 12;
+const aimBoundsX = fieldWidth / 2;
+const aimBoundsZ = fieldLength / 2 + goalDepth;
 
 let energy = maxEnergy;
+let precisionMode = false;
 
 function setInputState(event, isDown) {
   const key = event.key.toLowerCase();
@@ -225,6 +237,10 @@ function setInputState(event, isDown) {
     input.right = isDown;
   } else if (key === "d") {
     input.left = isDown;
+  } else if (event.code === "KeyE") {
+    if (isDown) {
+      togglePrecisionMode();
+    }
   } else if (event.code === "ShiftLeft" || event.code === "ShiftRight") {
     input.sprint = isDown;
   } else if (event.code === "Space" && isDown) {
@@ -281,7 +297,45 @@ document.addEventListener(
   { passive: false }
 );
 
+document.addEventListener("mousedown", (event) => {
+  if (event.button !== 0 || !precisionMode) {
+    return;
+  }
+  shootBall();
+  event.preventDefault();
+});
+
+function togglePrecisionMode() {
+  if (precisionMode) {
+    precisionMode = false;
+    aimTarget.visible = false;
+    return;
+  }
+
+  const dx = player.position.x - ball.position.x;
+  const dz = player.position.z - ball.position.z;
+  const distanceToBall = Math.hypot(dx, dz);
+  if (distanceToBall > precisionDistance) {
+    return;
+  }
+
+  precisionMode = true;
+  playerVelocity.set(0, 0, 0);
+  ballVelocity.set(0, 0, 0);
+  aimTarget.visible = true;
+}
+
 function updateMovement(delta) {
+  if (precisionMode) {
+    playerVelocity.set(0, 0, 0);
+    jumpRequested = false;
+    energy = Math.min(maxEnergy, energy + energyRegen * delta);
+    if (energyFill) {
+      energyFill.style.transform = `scaleX(${energy / maxEnergy})`;
+    }
+    return;
+  }
+
   const forward = new THREE.Vector3(Math.sin(yaw), 0, Math.cos(yaw));
   const right = new THREE.Vector3(forward.z, 0, -forward.x);
   const moveDir = new THREE.Vector3();
@@ -418,6 +472,11 @@ function resolvePlayerBallCollision() {
 }
 
 function updateBall(delta) {
+  if (precisionMode) {
+    ballVelocity.set(0, 0, 0);
+    return;
+  }
+
   const drag = Math.pow(0.992, delta * 60);
   ballVelocity.x *= drag;
   ballVelocity.z *= drag;
@@ -438,7 +497,74 @@ function updateBall(delta) {
   resolvePlayerBallCollision();
 }
 
+function updateAimTarget() {
+  if (!precisionMode) {
+    aimTarget.visible = false;
+    return;
+  }
+
+  const direction = new THREE.Vector3(
+    Math.sin(yaw) * Math.cos(pitch),
+    Math.sin(pitch),
+    Math.cos(yaw) * Math.cos(pitch)
+  );
+  const origin = camera.position.clone();
+  let target = null;
+
+  if (direction.y < -0.01) {
+    const t = (groundY - origin.y) / direction.y;
+    if (t > 0) {
+      target = origin.clone().addScaledVector(direction, t);
+    }
+  }
+
+  if (!target) {
+    const horizontal = new THREE.Vector3(direction.x, 0, direction.z);
+    if (horizontal.lengthSq() < 0.0001) {
+      horizontal.set(0, 0, 1);
+    }
+    horizontal.normalize();
+    target = new THREE.Vector3(origin.x, groundY, origin.z).addScaledVector(horizontal, 8);
+  }
+
+  target.x = THREE.MathUtils.clamp(target.x, -aimBoundsX, aimBoundsX);
+  target.z = THREE.MathUtils.clamp(target.z, -aimBoundsZ, aimBoundsZ);
+  target.y = groundY + 0.02;
+  aimTarget.position.copy(target);
+  aimTarget.visible = true;
+}
+
+function shootBall() {
+  if (!precisionMode) {
+    return;
+  }
+  const target = aimTarget.position.clone();
+  const direction = target.sub(ball.position);
+  direction.y = 0;
+  const distanceToTarget = direction.length();
+  if (distanceToTarget < 0.05) {
+    return;
+  }
+  direction.normalize();
+  ballVelocity.copy(direction.multiplyScalar(shotSpeed));
+  precisionMode = false;
+  aimTarget.visible = false;
+}
+
 function updateCamera() {
+  if (precisionMode) {
+    pitch = THREE.MathUtils.clamp(pitch, -1.2, 1.2);
+    const direction = new THREE.Vector3(
+      Math.sin(yaw) * Math.cos(pitch),
+      Math.sin(pitch),
+      Math.cos(yaw) * Math.cos(pitch)
+    );
+    const head = new THREE.Vector3(player.position.x, player.position.y + 0.4, player.position.z);
+    camera.position.copy(head);
+    camera.lookAt(head.clone().add(direction));
+    return;
+  }
+
   const targetHeight = 0.8;
   const target = new THREE.Vector3(player.position.x, player.position.y + targetHeight, player.position.z);
   const minCameraHeight = groundY + 0.2;
@@ -466,6 +592,7 @@ function animate() {
   updateMovement(delta);
   updateBall(delta);
   updateCamera();
+  updateAimTarget();
   renderer.render(scene, camera);
 }
 
