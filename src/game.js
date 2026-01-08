@@ -342,7 +342,10 @@ export function createGame({ world, input, ui }) {
 
     const moving = inputDir.lengthSq() > 0;
     const sprinting = inputState.sprint && energy > 0.1 && moving;
-    const maxSpeed = MOVEMENT.moveSpeed * (sprinting ? MOVEMENT.sprintMultiplier : 1);
+    let maxSpeed = MOVEMENT.moveSpeed * (sprinting ? MOVEMENT.sprintMultiplier : 1);
+    if (charging) {
+      maxSpeed *= SHOOTING.chargeSpeedFactor;
+    }
     if (moving) {
       inputDir.normalize();
     }

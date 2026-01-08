@@ -67,10 +67,11 @@ export const PHYSICS = {
 };
 
 export const SHOOTING = {
-  minShotSpeed: 9,
-  maxShotSpeed: 22,
-  maxChargeTime: 1.2,
+  minShotSpeed: 22,
+  maxShotSpeed: 66,
+  maxChargeTime: 2.6,
   carryCooldownDuration: 0.25,
+  chargeSpeedFactor: 0.45,
 };
 
 export const MATCH = {
