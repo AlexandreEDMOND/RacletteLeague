@@ -434,8 +434,14 @@ function resolveWallCollision(position, radius, velocity, restitution) {
 }
 
 function updateCarriedBallPosition() {
-  const direction = new THREE.Vector3(Math.sin(yaw), 0, Math.cos(yaw));
-  const forward = direction.lengthSq() < 0.0001 ? new THREE.Vector3(0, 0, 1) : direction.normalize();
+  const moveDir = new THREE.Vector3(playerVelocity.x, 0, playerVelocity.z);
+  let forward = null;
+  if (moveDir.lengthSq() > 0.001) {
+    forward = moveDir.normalize();
+  } else {
+    const cameraDir = new THREE.Vector3(Math.sin(yaw), 0, Math.cos(yaw));
+    forward = cameraDir.lengthSq() < 0.0001 ? new THREE.Vector3(0, 0, 1) : cameraDir.normalize();
+  }
   const desired = player.position.clone().addScaledVector(forward, carryDistance);
   desired.y = ballRadius;
   ball.position.copy(desired);
