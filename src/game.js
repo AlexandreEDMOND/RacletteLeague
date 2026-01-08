@@ -29,6 +29,8 @@ export function createGame({ world, input, ui }) {
   let playerTeam = null;
   let walkPhase = 0;
   let currentPlanarSpeed = 0;
+  let trickTime = 0;
+  let trickDirection = 0;
 
   const score = { blue: 0, red: 0 };
 
@@ -321,26 +323,42 @@ export function createGame({ world, input, ui }) {
       currentPlanarSpeed = 0;
       playerGroup.position.y = playerHalfHeight;
       inputState.jumpRequested = false;
+      inputState.trickLeftRequested = false;
+      inputState.trickRightRequested = false;
+      playerGroup.rotation.z = 0;
       return;
+    }
+
+    if (trickTime > 0) {
+      trickTime = Math.max(0, trickTime - delta);
+      const facingDir = new THREE.Vector3(Math.sin(playerGroup.rotation.y), 0, Math.cos(playerGroup.rotation.y));
+      const rightDir = new THREE.Vector3(facingDir.z, 0, -facingDir.x);
+      playerVelocity.x = rightDir.x * MOVEMENT.trickSpeed * trickDirection;
+      playerVelocity.z = rightDir.z * MOVEMENT.trickSpeed * trickDirection;
+      currentPlanarSpeed = Math.hypot(playerVelocity.x, playerVelocity.z);
+      const rollProgress = 1 - trickTime / MOVEMENT.trickDuration;
+      playerGroup.rotation.z = trickDirection * rollProgress * Math.PI * 2;
+    } else {
+      playerGroup.rotation.z = 0;
     }
 
     const forward = new THREE.Vector3(Math.sin(cameraState.yaw), 0, Math.cos(cameraState.yaw));
     const right = new THREE.Vector3(forward.z, 0, -forward.x);
     const inputDir = new THREE.Vector3();
-    if (inputState.forward) {
+    if (inputState.forward && trickTime <= 0) {
       inputDir.add(forward);
     }
-    if (inputState.backward) {
+    if (inputState.backward && trickTime <= 0) {
       inputDir.addScaledVector(forward, -1);
     }
-    if (inputState.left) {
+    if (inputState.left && trickTime <= 0) {
       inputDir.addScaledVector(right, -1);
     }
-    if (inputState.right) {
+    if (inputState.right && trickTime <= 0) {
       inputDir.add(right);
     }
 
-    const moving = inputDir.lengthSq() > 0;
+    const moving = trickTime <= 0 && inputDir.lengthSq() > 0;
     const sprinting = inputState.sprint && energy > 0.1 && moving;
     let maxSpeed = MOVEMENT.moveSpeed * (sprinting ? MOVEMENT.sprintMultiplier : 1);
     if (charging) {
@@ -383,15 +401,17 @@ export function createGame({ world, input, ui }) {
       } else if (planarSpeed > maxSpeed) {
         planarSpeed = Math.max(maxSpeed, planarSpeed - MOVEMENT.moveDeceleration * delta);
       }
-    } else {
+    } else if (trickTime <= 0) {
       planarSpeed *= Math.pow(MOVEMENT.idleDrag, delta * 60);
     }
 
-    playerVelocity.x = newDir.x * planarSpeed;
-    playerVelocity.z = newDir.z * planarSpeed;
-    currentPlanarSpeed = planarSpeed;
+    if (trickTime <= 0) {
+      playerVelocity.x = newDir.x * planarSpeed;
+      playerVelocity.z = newDir.z * planarSpeed;
+      currentPlanarSpeed = planarSpeed;
+    }
 
-    if (planarSpeed > 0.05) {
+    if (planarSpeed > 0.05 && trickTime <= 0) {
       playerGroup.rotation.y = Math.atan2(newDir.x, newDir.z);
     }
 
@@ -416,6 +436,16 @@ export function createGame({ world, input, ui }) {
       }
     }
     inputState.jumpRequested = false;
+    if (inputState.trickLeftRequested || inputState.trickRightRequested) {
+      if (trickTime <= 0 && energy >= MOVEMENT.trickEnergyCost) {
+        trickDirection = inputState.trickLeftRequested ? -1 : 1;
+        trickTime = MOVEMENT.trickDuration;
+        energy = Math.max(0, energy - MOVEMENT.trickEnergyCost);
+        ui.updateEnergy(energy / MOVEMENT.maxEnergy);
+      }
+      inputState.trickLeftRequested = false;
+      inputState.trickRightRequested = false;
+    }
 
     playerVelocity.y += PHYSICS.gravity * delta;
     playerGroup.position.x += playerVelocity.x * delta;

@@ -53,9 +53,12 @@ export const MOVEMENT = {
   idleDrag: 0.92,
   sprintMultiplier: 1.45,
   maxEnergy: 100,
-  energyDrain: 35,
-  energyRegen: 22,
-  jumpEnergyCost: 18,
+  energyDrain: 50,
+  energyRegen: 12,
+  jumpEnergyCost: 28,
+  trickEnergyCost: 45,
+  trickDuration: 0.25,
+  trickSpeed: 16,
   jumpSpeed: 7.5,
 };
 

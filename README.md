@@ -15,6 +15,7 @@ Prototype Rocket League-style in Three.js with keyboard movement, third-person c
 - Mouse: look
 - Mouse wheel: zoom
 - Left click (hold): charge shot when carrying the ball
+- A / E: side trick (energy cost)
 
 ## Project structure
 

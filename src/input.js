@@ -9,6 +9,8 @@ export function createInput({ renderer, instructions }) {
     right: false,
     sprint: false,
     jumpRequested: false,
+    trickLeftRequested: false,
+    trickRightRequested: false,
   };
 
   const cameraState = {
@@ -39,6 +41,10 @@ export function createInput({ renderer, instructions }) {
       input.sprint = isDown;
     } else if (event.code === "Space" && isDown) {
       input.jumpRequested = true;
+    } else if (event.code === "KeyA" && isDown) {
+      input.trickLeftRequested = true;
+    } else if (event.code === "KeyE" && isDown) {
+      input.trickRightRequested = true;
     } else {
       return;
     }
