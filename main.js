@@ -179,16 +179,11 @@ ball.receiveShadow = true;
 ball.position.set(0, ballRadius, -5);
 scene.add(ball);
 
-const aimTargetMaterial = new THREE.MeshBasicMaterial({ color: 0xfff59d, transparent: true, opacity: 0.9 });
-const aimTarget = new THREE.Mesh(new THREE.RingGeometry(0.25, 0.45, 32), aimTargetMaterial);
-aimTarget.rotation.x = -Math.PI / 2;
-aimTarget.position.y = 0.02;
-aimTarget.visible = false;
-scene.add(aimTarget);
-
 const playerVelocity = new THREE.Vector3();
 const ballVelocity = new THREE.Vector3();
 const moveSpeed = 7;
+const moveAcceleration = 18;
+const moveDeceleration = 14;
 const sprintMultiplier = 1.45;
 const maxEnergy = 100;
 const energyDrain = 35;
@@ -214,18 +209,17 @@ const minDistance = 3;
 const maxDistance = 12;
 
 const playerCollisionRadius = 0.6;
+const carryDistance = playerCollisionRadius + ballRadius + 0.1;
+const attachDistance = playerCollisionRadius + ballRadius + 0.05;
 const ballRestitution = 0.55;
 const wallRestitution = 0.65;
 const ballFriction = 0.965;
-const ballPushFactor = 0.9;
-const ballNudge = 0.6;
-const precisionDistance = 2.4;
-const shotSpeed = 12;
-const aimBoundsX = fieldWidth / 2;
-const aimBoundsZ = fieldLength / 2 + goalDepth;
+const shotSpeed = 16;
+const carryCooldownDuration = 0.25;
 
 let energy = maxEnergy;
-let precisionMode = false;
+let carryingBall = false;
+let carryCooldown = 0;
 
 function setInputState(event, isDown) {
   const key = event.key.toLowerCase();
@@ -237,10 +231,6 @@ function setInputState(event, isDown) {
     input.right = isDown;
   } else if (key === "d") {
     input.left = isDown;
-  } else if (event.code === "KeyE") {
-    if (isDown) {
-      togglePrecisionMode();
-    }
   } else if (event.code === "ShiftLeft" || event.code === "ShiftRight") {
     input.sprint = isDown;
   } else if (event.code === "Space" && isDown) {
@@ -298,44 +288,14 @@ document.addEventListener(
 );
 
 document.addEventListener("mousedown", (event) => {
-  if (event.button !== 0 || !precisionMode) {
+  if (event.button !== 0 || !carryingBall) {
     return;
   }
   shootBall();
   event.preventDefault();
 });
 
-function togglePrecisionMode() {
-  if (precisionMode) {
-    precisionMode = false;
-    aimTarget.visible = false;
-    return;
-  }
-
-  const dx = player.position.x - ball.position.x;
-  const dz = player.position.z - ball.position.z;
-  const distanceToBall = Math.hypot(dx, dz);
-  if (distanceToBall > precisionDistance) {
-    return;
-  }
-
-  precisionMode = true;
-  playerVelocity.set(0, 0, 0);
-  ballVelocity.set(0, 0, 0);
-  aimTarget.visible = true;
-}
-
 function updateMovement(delta) {
-  if (precisionMode) {
-    playerVelocity.set(0, 0, 0);
-    jumpRequested = false;
-    energy = Math.min(maxEnergy, energy + energyRegen * delta);
-    if (energyFill) {
-      energyFill.style.transform = `scaleX(${energy / maxEnergy})`;
-    }
-    return;
-  }
-
   const forward = new THREE.Vector3(Math.sin(yaw), 0, Math.cos(yaw));
   const right = new THREE.Vector3(forward.z, 0, -forward.x);
   const moveDir = new THREE.Vector3();
@@ -358,10 +318,28 @@ function updateMovement(delta) {
 
   if (moving) {
     moveDir.normalize();
-    playerVelocity.x = moveDir.x * speed;
-    playerVelocity.z = moveDir.z * speed;
-    player.rotation.y = Math.atan2(moveDir.x, moveDir.z);
-  } else {
+  }
+
+  const desiredX = moving ? moveDir.x * speed : 0;
+  const desiredZ = moving ? moveDir.z * speed : 0;
+  const accel = moving ? moveAcceleration : moveDeceleration;
+  let deltaX = desiredX - playerVelocity.x;
+  let deltaZ = desiredZ - playerVelocity.z;
+  const deltaLen = Math.hypot(deltaX, deltaZ);
+  const maxDelta = accel * delta;
+  if (deltaLen > maxDelta) {
+    const scale = maxDelta / deltaLen;
+    deltaX *= scale;
+    deltaZ *= scale;
+  }
+  playerVelocity.x += deltaX;
+  playerVelocity.z += deltaZ;
+
+  const planarSpeed = Math.hypot(playerVelocity.x, playerVelocity.z);
+  if (planarSpeed > 0.05) {
+    player.rotation.y = Math.atan2(playerVelocity.x, playerVelocity.z);
+  }
+  if (!moving && planarSpeed < 0.02) {
     playerVelocity.x = 0;
     playerVelocity.z = 0;
   }
@@ -455,25 +433,55 @@ function resolveWallCollision(position, radius, velocity, restitution) {
   }
 }
 
-function resolvePlayerBallCollision() {
-  const offset = new THREE.Vector3().subVectors(ball.position, player.position);
-  const dist = offset.length();
-  const minDist = ballRadius + playerCollisionRadius;
-  if (dist < minDist) {
-    const normal = dist > 0.0001 ? offset.multiplyScalar(1 / dist) : new THREE.Vector3(0, 1, 0);
-    ball.position.copy(player.position).addScaledVector(normal, minDist);
-    const relativeSpeed = playerVelocity.dot(normal);
-    if (relativeSpeed > 0) {
-      ballVelocity.addScaledVector(normal, relativeSpeed * ballPushFactor);
-    } else {
-      ballVelocity.addScaledVector(normal, ballNudge);
-    }
+function updateCarriedBallPosition() {
+  const direction = new THREE.Vector3(Math.sin(yaw), 0, Math.cos(yaw));
+  const forward = direction.lengthSq() < 0.0001 ? new THREE.Vector3(0, 0, 1) : direction.normalize();
+  const desired = player.position.clone().addScaledVector(forward, carryDistance);
+  desired.y = ballRadius;
+  ball.position.copy(desired);
+  resolveWallCollision(ball.position, ballRadius, ballVelocity, wallRestitution);
+}
+
+function tryAttachBall() {
+  if (carryingBall || carryCooldown > 0) {
+    return;
+  }
+  const dx = ball.position.x - player.position.x;
+  const dz = ball.position.z - player.position.z;
+  const distance = Math.hypot(dx, dz);
+  if (distance <= attachDistance) {
+    carryingBall = true;
+    ballVelocity.set(0, 0, 0);
+    updateCarriedBallPosition();
   }
 }
 
+function shootBall() {
+  if (!carryingBall) {
+    return;
+  }
+  const direction = new THREE.Vector3();
+  camera.getWorldDirection(direction);
+  direction.y = 0;
+  if (direction.lengthSq() < 0.0001) {
+    direction.set(Math.sin(yaw), 0, Math.cos(yaw));
+  }
+  direction.normalize();
+  ball.position.copy(player.position).addScaledVector(direction, carryDistance + 0.05);
+  ball.position.y = ballRadius;
+  ballVelocity.copy(direction.multiplyScalar(shotSpeed));
+  ballVelocity.y = 0;
+  carryingBall = false;
+  carryCooldown = carryCooldownDuration;
+}
+
 function updateBall(delta) {
-  if (precisionMode) {
+  if (carryCooldown > 0) {
+    carryCooldown = Math.max(0, carryCooldown - delta);
+  }
+  if (carryingBall) {
     ballVelocity.set(0, 0, 0);
+    updateCarriedBallPosition();
     return;
   }
 
@@ -494,77 +502,10 @@ function updateBall(delta) {
   }
 
   resolveWallCollision(ball.position, ballRadius, ballVelocity, wallRestitution);
-  resolvePlayerBallCollision();
-}
-
-function updateAimTarget() {
-  if (!precisionMode) {
-    aimTarget.visible = false;
-    return;
-  }
-
-  const direction = new THREE.Vector3(
-    Math.sin(yaw) * Math.cos(pitch),
-    Math.sin(pitch),
-    Math.cos(yaw) * Math.cos(pitch)
-  );
-  const origin = camera.position.clone();
-  let target = null;
-
-  if (direction.y < -0.01) {
-    const t = (groundY - origin.y) / direction.y;
-    if (t > 0) {
-      target = origin.clone().addScaledVector(direction, t);
-    }
-  }
-
-  if (!target) {
-    const horizontal = new THREE.Vector3(direction.x, 0, direction.z);
-    if (horizontal.lengthSq() < 0.0001) {
-      horizontal.set(0, 0, 1);
-    }
-    horizontal.normalize();
-    target = new THREE.Vector3(origin.x, groundY, origin.z).addScaledVector(horizontal, 8);
-  }
-
-  target.x = THREE.MathUtils.clamp(target.x, -aimBoundsX, aimBoundsX);
-  target.z = THREE.MathUtils.clamp(target.z, -aimBoundsZ, aimBoundsZ);
-  target.y = groundY + 0.02;
-  aimTarget.position.copy(target);
-  aimTarget.visible = true;
-}
-
-function shootBall() {
-  if (!precisionMode) {
-    return;
-  }
-  const target = aimTarget.position.clone();
-  const direction = target.sub(ball.position);
-  direction.y = 0;
-  const distanceToTarget = direction.length();
-  if (distanceToTarget < 0.05) {
-    return;
-  }
-  direction.normalize();
-  ballVelocity.copy(direction.multiplyScalar(shotSpeed));
-  precisionMode = false;
-  aimTarget.visible = false;
+  tryAttachBall();
 }
 
 function updateCamera() {
-  if (precisionMode) {
-    pitch = THREE.MathUtils.clamp(pitch, -1.2, 1.2);
-    const direction = new THREE.Vector3(
-      Math.sin(yaw) * Math.cos(pitch),
-      Math.sin(pitch),
-      Math.cos(yaw) * Math.cos(pitch)
-    );
-    const head = new THREE.Vector3(player.position.x, player.position.y + 0.4, player.position.z);
-    camera.position.copy(head);
-    camera.lookAt(head.clone().add(direction));
-    return;
-  }
-
   const targetHeight = 0.8;
   const target = new THREE.Vector3(player.position.x, player.position.y + targetHeight, player.position.z);
   const minCameraHeight = groundY + 0.2;
@@ -592,7 +533,6 @@ function animate() {
   updateMovement(delta);
   updateBall(delta);
   updateCamera();
-  updateAimTarget();
   renderer.render(scene, camera);
 }
 
