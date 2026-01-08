@@ -179,6 +179,17 @@ ball.receiveShadow = true;
 ball.position.set(0, ballRadius, -5);
 scene.add(ball);
 
+const chargeArrow = new THREE.ArrowHelper(
+  new THREE.Vector3(0, 0, 1),
+  new THREE.Vector3(0, ballRadius + 0.2, 0),
+  1,
+  0xffe082,
+  0.5,
+  0.3
+);
+chargeArrow.visible = false;
+scene.add(chargeArrow);
+
 const playerVelocity = new THREE.Vector3();
 const ballVelocity = new THREE.Vector3();
 const moveSpeed = 7;
@@ -214,12 +225,16 @@ const attachDistance = playerCollisionRadius + ballRadius + 0.05;
 const ballRestitution = 0.55;
 const wallRestitution = 0.65;
 const ballFriction = 0.965;
-const shotSpeed = 16;
+const minShotSpeed = 9;
+const maxShotSpeed = 22;
+const maxChargeTime = 1.2;
 const carryCooldownDuration = 0.25;
 
 let energy = maxEnergy;
 let carryingBall = false;
 let carryCooldown = 0;
+let charging = false;
+let chargeTime = 0;
 
 function setInputState(event, isDown) {
   const key = event.key.toLowerCase();
@@ -288,10 +303,18 @@ document.addEventListener(
 );
 
 document.addEventListener("mousedown", (event) => {
-  if (event.button !== 0 || !carryingBall) {
+  if (event.button !== 0 || !carryingBall || charging) {
     return;
   }
-  shootBall();
+  startCharging();
+  event.preventDefault();
+});
+
+document.addEventListener("mouseup", (event) => {
+  if (event.button !== 0 || !charging) {
+    return;
+  }
+  releaseShot();
   event.preventDefault();
 });
 
@@ -462,10 +485,7 @@ function tryAttachBall() {
   }
 }
 
-function shootBall() {
-  if (!carryingBall) {
-    return;
-  }
+function getAimDirection() {
   const direction = new THREE.Vector3();
   camera.getWorldDirection(direction);
   direction.y = 0;
@@ -473,9 +493,40 @@ function shootBall() {
     direction.set(Math.sin(yaw), 0, Math.cos(yaw));
   }
   direction.normalize();
+  return direction;
+}
+
+function startCharging() {
+  charging = true;
+  chargeTime = 0;
+  updateChargeArrow();
+}
+
+function releaseShot() {
+  if (!carryingBall) {
+    cancelCharging();
+    return;
+  }
+  const chargeRatio = Math.min(chargeTime / maxChargeTime, 1);
+  const shotSpeed = minShotSpeed + (maxShotSpeed - minShotSpeed) * chargeRatio;
+  shootBall(shotSpeed);
+  cancelCharging();
+}
+
+function cancelCharging() {
+  charging = false;
+  chargeTime = 0;
+  chargeArrow.visible = false;
+}
+
+function shootBall(speed) {
+  if (!carryingBall) {
+    return;
+  }
+  const direction = getAimDirection();
   ball.position.copy(player.position).addScaledVector(direction, carryDistance + 0.05);
   ball.position.y = ballRadius;
-  ballVelocity.copy(direction.multiplyScalar(shotSpeed));
+  ballVelocity.copy(direction.multiplyScalar(speed));
   ballVelocity.y = 0;
   carryingBall = false;
   carryCooldown = carryCooldownDuration;
@@ -489,6 +540,10 @@ function updateBall(delta) {
     ballVelocity.set(0, 0, 0);
     updateCarriedBallPosition();
     return;
+  }
+
+  if (charging) {
+    cancelCharging();
   }
 
   const drag = Math.pow(0.992, delta * 60);
@@ -509,6 +564,22 @@ function updateBall(delta) {
 
   resolveWallCollision(ball.position, ballRadius, ballVelocity, wallRestitution);
   tryAttachBall();
+}
+
+function updateChargeArrow() {
+  if (!charging || !carryingBall) {
+    chargeArrow.visible = false;
+    return;
+  }
+  const ratio = Math.min(chargeTime / maxChargeTime, 1);
+  const direction = getAimDirection();
+  const length = 1 + ratio * 2.5;
+  const origin = ball.position.clone();
+  origin.y = ballRadius + 0.2;
+  chargeArrow.position.copy(origin);
+  chargeArrow.setDirection(direction);
+  chargeArrow.setLength(length, 0.4 + ratio * 0.4, 0.25 + ratio * 0.3);
+  chargeArrow.visible = true;
 }
 
 function updateCamera() {
@@ -538,6 +609,12 @@ function animate() {
   const delta = Math.min(clock.getDelta(), 0.05);
   updateMovement(delta);
   updateBall(delta);
+  if (charging) {
+    chargeTime = Math.min(maxChargeTime, chargeTime + delta);
+    updateChargeArrow();
+  } else if (chargeArrow.visible) {
+    chargeArrow.visible = false;
+  }
   updateCamera();
   renderer.render(scene, camera);
 }
