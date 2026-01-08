@@ -255,6 +255,7 @@ const sprintMultiplier = 1.45;
 const maxEnergy = 100;
 const energyDrain = 35;
 const energyRegen = 22;
+const jumpEnergyCost = 18;
 const gravity = -18;
 const jumpSpeed = 7.5;
 const groundY = 0;
@@ -462,7 +463,10 @@ function updateMovement(delta) {
     }
   }
   if (jumpRequested && grounded) {
-    playerVelocity.y = jumpSpeed;
+    if (energy >= jumpEnergyCost) {
+      playerVelocity.y = jumpSpeed;
+      energy = Math.max(0, energy - jumpEnergyCost);
+    }
   }
   jumpRequested = false;
 
@@ -564,7 +568,8 @@ function updateCarriedBallPosition() {
     forward = facing.lengthSq() < 0.0001 ? new THREE.Vector3(0, 0, 1) : facing.normalize();
   }
   const desired = player.position.clone().addScaledVector(forward, carryDistance);
-  desired.y = ballRadius;
+  const playerGroundOffset = player.position.y - playerHalfHeight;
+  desired.y = Math.max(ballRadius, playerGroundOffset + ballRadius);
   ball.position.copy(desired);
   resolveWallCollision(ball.position, ballRadius, ballVelocity, wallRestitution);
 }
