@@ -69,6 +69,7 @@ export const PHYSICS = {
   ballRestitution: 0.55,
   wallRestitution: 0.65,
   ballFriction: 0.965,
+  groundStickSpeed: 1.2,
 };
 
 export const SHOOTING = {
@@ -76,6 +77,8 @@ export const SHOOTING = {
   maxShotSpeed: 66,
   meterDuration: 1,
   tapShotSpeed: 28,
+  lobMinLift: 6,
+  lobMaxLift: 14,
   kickDuration: 0.15,
   carryCooldownDuration: 0.25,
   chargeSpeedFactor: 0.45,

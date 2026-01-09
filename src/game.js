@@ -2,7 +2,7 @@ import THREE from "./three.js";
 import { BALL, CAMERA, FIELD, GOAL, MATCH, MOVEMENT, PHYSICS, PLAYER, SHOOTING } from "./config.js";
 
 export function createGame({ world, input, ui }) {
-  const { scene, camera, renderer, wallColliders, player, ball, chargeArrow, groundY } = world;
+  const { scene, camera, renderer, wallColliders, player, ball, groundY } = world;
   const inputState = input.input;
   const cameraState = input.cameraState;
 
@@ -49,7 +49,6 @@ export function createGame({ world, input, ui }) {
     carryingBall = false;
     charging = false;
     chargeTime = 0;
-    chargeArrow.visible = false;
     ui.hideShotMeter();
     ballVelocity.set(0, 0, 0);
     ballMesh.position.set(0, BALL.radius, 0);
@@ -279,18 +278,17 @@ export function createGame({ world, input, ui }) {
   function cancelCharging() {
     charging = false;
     chargeTime = 0;
-    chargeArrow.visible = false;
     ui.hideShotMeter();
   }
 
-  function shootBall(direction, speed) {
+  function shootBall(direction, speed, lift = 0) {
     if (!carryingBall) {
       return;
     }
     ballMesh.position.copy(playerGroup.position).addScaledVector(direction, carryDistance + 0.05);
     ballMesh.position.y = BALL.radius;
     ballVelocity.copy(direction.multiplyScalar(speed));
-    ballVelocity.y = 0;
+    ballVelocity.y = Math.max(0, lift);
     carryingBall = false;
     carryCooldown = SHOOTING.carryCooldownDuration;
   }
@@ -300,7 +298,7 @@ export function createGame({ world, input, ui }) {
       return;
     }
     const direction = getAimDirection();
-    shootBall(direction, SHOOTING.tapShotSpeed);
+    shootBall(direction, SHOOTING.tapShotSpeed, 0);
     kickFlashTime = SHOOTING.kickDuration;
   }
 
@@ -319,11 +317,10 @@ export function createGame({ world, input, ui }) {
     }
     if (carryingBall) {
       const progress = Math.min(chargeTime / SHOOTING.meterDuration, 1);
-      const speed =
-        SHOOTING.minShotSpeed +
-        (SHOOTING.maxShotSpeed - SHOOTING.minShotSpeed) * progress;
+      const speed = SHOOTING.minShotSpeed + (SHOOTING.maxShotSpeed - SHOOTING.minShotSpeed) * progress;
+      const lift = SHOOTING.lobMinLift + (SHOOTING.lobMaxLift - SHOOTING.lobMinLift) * progress;
       const direction = getAimDirection();
-      shootBall(direction, speed);
+      shootBall(direction, speed, lift);
       kickFlashTime = SHOOTING.kickDuration;
     }
     cancelCharging();
@@ -534,7 +531,11 @@ export function createGame({ world, input, ui }) {
     if (ballMesh.position.y < BALL.radius) {
       ballMesh.position.y = BALL.radius;
       if (ballVelocity.y < 0) {
-        ballVelocity.y *= -PHYSICS.ballRestitution;
+        if (Math.abs(ballVelocity.y) < PHYSICS.groundStickSpeed) {
+          ballVelocity.y = 0;
+        } else {
+          ballVelocity.y *= -PHYSICS.ballRestitution;
+        }
       }
       const groundFriction = Math.pow(PHYSICS.ballFriction, delta * 60);
       ballVelocity.x *= groundFriction;
@@ -543,22 +544,6 @@ export function createGame({ world, input, ui }) {
 
     resolveWallCollision(ballMesh.position, BALL.radius, ballVelocity, PHYSICS.wallRestitution);
     tryAttachBall();
-  }
-
-  function updateChargeArrow(progress) {
-    if (!charging || !carryingBall) {
-      chargeArrow.visible = false;
-      return;
-    }
-    const ratio = progress ?? Math.min(chargeTime / SHOOTING.meterDuration, 1);
-    const direction = getAimDirection();
-    const length = 1 + ratio * 2.5;
-    const origin = ballMesh.position.clone();
-    origin.y = BALL.radius + 0.2;
-    chargeArrow.position.copy(origin);
-    chargeArrow.setDirection(direction);
-    chargeArrow.setLength(length, 0.4 + ratio * 0.4, 0.25 + ratio * 0.3);
-    chargeArrow.visible = true;
   }
 
   function updateCamera() {
@@ -596,9 +581,6 @@ export function createGame({ world, input, ui }) {
       chargeTime = Math.min(SHOOTING.meterDuration, chargeTime + delta);
       const progress = Math.min(chargeTime / SHOOTING.meterDuration, 1);
       ui.updateShotMeter(progress, 0, 0);
-      updateChargeArrow(progress);
-    } else if (chargeArrow.visible) {
-      chargeArrow.visible = false;
     }
     checkGoal();
     updateCamera();

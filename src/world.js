@@ -251,16 +251,6 @@ export function createWorld() {
   ball.position.set(0, BALL.radius, -5);
   scene.add(ball);
 
-  const chargeArrow = new THREE.ArrowHelper(
-    new THREE.Vector3(0, 0, 1),
-    new THREE.Vector3(0, BALL.radius + 0.2, 0),
-    1,
-    0xffe082,
-    0.5,
-    0.3
-  );
-  chargeArrow.visible = false;
-  scene.add(chargeArrow);
 
   return {
     scene,
@@ -288,6 +278,5 @@ export function createWorld() {
       mesh: ball,
       radius: BALL.radius,
     },
-    chargeArrow,
   };
 }
