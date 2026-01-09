@@ -21,10 +21,21 @@ export function createInput({ renderer, instructions }) {
 
   let onPrimaryDown = null;
   let onPrimaryUp = null;
+  let onSecondaryDown = null;
+  let onSecondaryUp = null;
 
   function setShootHandlers(down, up) {
     onPrimaryDown = down;
     onPrimaryUp = up;
+  }
+
+  function setCancelHandler(handler) {
+    onSecondaryDown = handler;
+  }
+
+  function setSecondaryHandlers(down, up) {
+    onSecondaryDown = down;
+    onSecondaryUp = up;
   }
 
   function setInputState(event, isDown) {
@@ -114,6 +125,34 @@ export function createInput({ renderer, instructions }) {
     event.preventDefault();
   });
 
+  document.addEventListener("mousedown", (event) => {
+    if (event.button !== 2 || !onSecondaryDown) {
+      return;
+    }
+    if (document.pointerLockElement !== renderer.domElement) {
+      return;
+    }
+    onSecondaryDown();
+    event.preventDefault();
+  });
+
+  document.addEventListener("mouseup", (event) => {
+    if (event.button !== 2 || !onSecondaryUp) {
+      return;
+    }
+    if (document.pointerLockElement !== renderer.domElement) {
+      return;
+    }
+    onSecondaryUp();
+    event.preventDefault();
+  });
+
+  document.addEventListener("contextmenu", (event) => {
+    if (document.pointerLockElement === renderer.domElement) {
+      event.preventDefault();
+    }
+  });
+
   function exitPointerLock() {
     if (document.pointerLockElement) {
       document.exitPointerLock();
@@ -124,6 +163,8 @@ export function createInput({ renderer, instructions }) {
     input,
     cameraState,
     setShootHandlers,
+    setCancelHandler,
+    setSecondaryHandlers,
     exitPointerLock,
   };
 }

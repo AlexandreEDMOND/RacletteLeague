@@ -13,6 +13,9 @@ export function createUI() {
     finalRedScore: document.getElementById("finalRedScore"),
     restartMatch: document.getElementById("restartMatch"),
     changeTeam: document.getElementById("changeTeam"),
+    shotMeter: document.getElementById("shotMeter"),
+    shotGreen: document.getElementById("shotGreen"),
+    shotCursor: document.getElementById("shotCursor"),
   };
 
   function bindHandlers({ onTeamSelect, onRestart, onChangeTeam }) {
@@ -124,6 +127,30 @@ export function createUI() {
     }
   }
 
+  function updateShotMeter(progress, greenStart, greenWidth) {
+    if (ui.shotMeter) {
+      ui.shotMeter.style.display = "flex";
+    }
+    if (ui.shotGreen) {
+      if (greenWidth > 0) {
+        ui.shotGreen.style.display = "block";
+        ui.shotGreen.style.left = `${greenStart * 100}%`;
+        ui.shotGreen.style.width = `${greenWidth * 100}%`;
+      } else {
+        ui.shotGreen.style.display = "none";
+      }
+    }
+    if (ui.shotCursor) {
+      ui.shotCursor.style.left = `${progress * 100}%`;
+    }
+  }
+
+  function hideShotMeter() {
+    if (ui.shotMeter) {
+      ui.shotMeter.style.display = "none";
+    }
+  }
+
   return {
     ...ui,
     bindHandlers,
@@ -138,5 +165,7 @@ export function createUI() {
     hideMatchEnd,
     showTeamSelect,
     hideTeamSelect,
+    updateShotMeter,
+    hideShotMeter,
   };
 }

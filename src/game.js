@@ -31,6 +31,7 @@ export function createGame({ world, input, ui }) {
   let currentPlanarSpeed = 0;
   let trickTime = 0;
   let trickDirection = 0;
+  let kickFlashTime = 0;
 
   const score = { blue: 0, red: 0 };
 
@@ -49,6 +50,7 @@ export function createGame({ world, input, ui }) {
     charging = false;
     chargeTime = 0;
     chargeArrow.visible = false;
+    ui.hideShotMeter();
     ballVelocity.set(0, 0, 0);
     ballMesh.position.set(0, BALL.radius, 0);
 
@@ -104,7 +106,7 @@ export function createGame({ world, input, ui }) {
     gameState = "goalPause";
     goalPauseTime = MATCH.goalPause;
     carryingBall = false;
-    charging = false;
+    cancelCharging();
     ballVelocity.set(0, 0, 0);
     ui.showGoal();
   }
@@ -270,31 +272,21 @@ export function createGame({ world, input, ui }) {
   function startCharging() {
     charging = true;
     chargeTime = 0;
-    updateChargeArrow();
-  }
-
-  function releaseShot() {
-    if (!carryingBall) {
-      cancelCharging();
-      return;
-    }
-    const chargeRatio = Math.min(chargeTime / SHOOTING.maxChargeTime, 1);
-    const shotSpeed = SHOOTING.minShotSpeed + (SHOOTING.maxShotSpeed - SHOOTING.minShotSpeed) * chargeRatio;
-    shootBall(shotSpeed);
-    cancelCharging();
+    ui.updateShotMeter(0, 0, 0);
+    updateChargeArrow(0);
   }
 
   function cancelCharging() {
     charging = false;
     chargeTime = 0;
     chargeArrow.visible = false;
+    ui.hideShotMeter();
   }
 
-  function shootBall(speed) {
+  function shootBall(direction, speed) {
     if (!carryingBall) {
       return;
     }
-    const direction = getAimDirection();
     ballMesh.position.copy(playerGroup.position).addScaledVector(direction, carryDistance + 0.05);
     ballMesh.position.y = BALL.radius;
     ballVelocity.copy(direction.multiplyScalar(speed));
@@ -307,14 +299,34 @@ export function createGame({ world, input, ui }) {
     if (!carryingBall || charging) {
       return;
     }
+    const direction = getAimDirection();
+    shootBall(direction, SHOOTING.tapShotSpeed);
+    kickFlashTime = SHOOTING.kickDuration;
+  }
+
+  function handlePrimaryUp() {}
+
+  function handleSecondaryDown() {
+    if (!carryingBall || charging) {
+      return;
+    }
     startCharging();
   }
 
-  function handlePrimaryUp() {
+  function handleSecondaryUp() {
     if (!charging) {
       return;
     }
-    releaseShot();
+    if (carryingBall) {
+      const progress = Math.min(chargeTime / SHOOTING.meterDuration, 1);
+      const speed =
+        SHOOTING.minShotSpeed +
+        (SHOOTING.maxShotSpeed - SHOOTING.minShotSpeed) * progress;
+      const direction = getAimDirection();
+      shootBall(direction, speed);
+      kickFlashTime = SHOOTING.kickDuration;
+    }
+    cancelCharging();
   }
 
   function updateMovement(delta) {
@@ -463,21 +475,33 @@ export function createGame({ world, input, ui }) {
   function updateHumanoidAnimation(delta) {
     const maxSpeed = MOVEMENT.moveSpeed * MOVEMENT.sprintMultiplier;
     const speedRatio = THREE.MathUtils.clamp(currentPlanarSpeed / maxSpeed, 0, 1);
+    const chargeRatio = charging ? Math.min(chargeTime / SHOOTING.meterDuration, 1) : 0;
+    const chargeEase = chargeRatio * chargeRatio;
+    const chargePose = charging ? -0.9 * chargeEase : 0;
+    const kickPose =
+      kickFlashTime > 0 ? 0.9 * (kickFlashTime / SHOOTING.kickDuration) : 0;
+
     if (speedRatio < 0.01) {
-      playerPivots.leftLeg.rotation.x = 0;
       playerPivots.rightLeg.rotation.x = 0;
       playerPivots.leftArm.rotation.x = 0;
       playerPivots.rightArm.rotation.x = 0;
+      playerPivots.leftLeg.rotation.x = kickPose !== 0 ? kickPose : chargePose;
       return;
     }
 
     walkPhase += delta * (4 + speedRatio * 8);
     const legSwing = Math.sin(walkPhase) * 0.9 * speedRatio;
     const armSwing = Math.sin(walkPhase + Math.PI) * 0.7 * speedRatio;
-    playerPivots.leftLeg.rotation.x = legSwing;
     playerPivots.rightLeg.rotation.x = -legSwing;
     playerPivots.leftArm.rotation.x = armSwing;
     playerPivots.rightArm.rotation.x = -armSwing;
+    if (kickPose !== 0) {
+      playerPivots.leftLeg.rotation.x = kickPose;
+    } else if (charging) {
+      playerPivots.leftLeg.rotation.x = chargePose;
+    } else {
+      playerPivots.leftLeg.rotation.x = legSwing;
+    }
   }
 
   function updateBall(delta) {
@@ -521,12 +545,12 @@ export function createGame({ world, input, ui }) {
     tryAttachBall();
   }
 
-  function updateChargeArrow() {
+  function updateChargeArrow(progress) {
     if (!charging || !carryingBall) {
       chargeArrow.visible = false;
       return;
     }
-    const ratio = Math.min(chargeTime / SHOOTING.maxChargeTime, 1);
+    const ratio = progress ?? Math.min(chargeTime / SHOOTING.meterDuration, 1);
     const direction = getAimDirection();
     const length = 1 + ratio * 2.5;
     const origin = ballMesh.position.clone();
@@ -564,10 +588,15 @@ export function createGame({ world, input, ui }) {
     updateGameState(delta);
     updateMovement(delta);
     updateBall(delta);
+    if (kickFlashTime > 0) {
+      kickFlashTime = Math.max(0, kickFlashTime - delta);
+    }
     updateHumanoidAnimation(delta);
     if (charging) {
-      chargeTime = Math.min(SHOOTING.maxChargeTime, chargeTime + delta);
-      updateChargeArrow();
+      chargeTime = Math.min(SHOOTING.meterDuration, chargeTime + delta);
+      const progress = Math.min(chargeTime / SHOOTING.meterDuration, 1);
+      ui.updateShotMeter(progress, 0, 0);
+      updateChargeArrow(progress);
     } else if (chargeArrow.visible) {
       chargeArrow.visible = false;
     }
@@ -580,6 +609,8 @@ export function createGame({ world, input, ui }) {
     update,
     handlePrimaryDown,
     handlePrimaryUp,
+    handleSecondaryDown,
+    handleSecondaryUp,
     handleTeamSelect,
     handleRestart,
     handleChangeTeam,

@@ -196,6 +196,56 @@ canvas {
   pointer-events: none;
 }
 
+.shot-track {
+  position: relative;
+  width: 320px;
+  height: 12px;
+  border-radius: 999px;
+  background: rgba(15, 21, 32, 0.8);
+  box-shadow: 0 0 0 1px rgba(248, 244, 238, 0.25);
+  overflow: hidden;
+}
+
+#shotMeter {
+  position: absolute;
+  left: 50%;
+  bottom: 90px;
+  transform: translateX(-50%);
+  display: none;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  color: #f8f4ee;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  font-size: 12px;
+  z-index: 3;
+  pointer-events: none;
+}
+
+#shotGreen {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: 20%;
+  background: linear-gradient(90deg, #2dd4bf, #22c55e);
+}
+
+#shotCursor {
+  position: absolute;
+  top: -6px;
+  width: 4px;
+  height: 24px;
+  background: #f8f4ee;
+  box-shadow: 0 0 12px rgba(248, 244, 238, 0.6);
+  transform: translateX(-50%);
+}
+
+.shot-label {
+  opacity: 0.8;
+}
+
 .energy-bar {
   width: 160px;
   height: 10px;

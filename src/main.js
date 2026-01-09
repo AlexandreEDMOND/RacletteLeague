@@ -15,6 +15,7 @@ ui.bindHandlers({
 });
 
 input.setShootHandlers(game.handlePrimaryDown, game.handlePrimaryUp);
+input.setSecondaryHandlers(game.handleSecondaryDown, game.handleSecondaryUp);
 
 let lastTime = performance.now();
 function animate(time) {

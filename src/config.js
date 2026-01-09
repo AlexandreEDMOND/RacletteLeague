@@ -74,7 +74,9 @@ export const PHYSICS = {
 export const SHOOTING = {
   minShotSpeed: 22,
   maxShotSpeed: 66,
-  maxChargeTime: 2.6,
+  meterDuration: 1,
+  tapShotSpeed: 28,
+  kickDuration: 0.15,
   carryCooldownDuration: 0.25,
   chargeSpeedFactor: 0.45,
 };
